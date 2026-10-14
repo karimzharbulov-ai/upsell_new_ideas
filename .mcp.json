@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "console": {
+      "type": "http",
+      "url": "https://console.nvs.team/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${CONSOLE_MCP_TOKEN}"
+      }
+    }
+  }
+}
