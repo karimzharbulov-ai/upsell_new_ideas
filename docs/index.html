@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Доска Карима</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px) }
+body { margin: 0; font: 14px/1.4 system-ui, sans-serif }
+[hidden] { display: none !important }
+.setup { display: grid; gap: 12px }
+.setup p { margin: 0; color: var(--muted); font-size: 13px }
+.setup a { color: inherit }
+.setup ol { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; display: grid; gap: 4px }
+</style>
+<style>
+/* Layout: колонки-списки на цветном поле доски, как в Trello; сверху — строка «накидай словами» и фильтр по фокусам */
+:root {
+  --board: #1f4a5c;
+  --board-2: #275a6f;
+  --board-fg: #f0f6f8;
+  --board-muted: #b9d0d9;
+  --col: #e9eef1;
+  --card: #ffffff;
+  --fg: #172630;
+  --muted: #5d717c;
+  --line: #d3dde2;
+  --accent: #f2b134;
+  --accent-fg: #1d1606;
+  --hi: #d6463f;
+  --med: #d98f1f;
+  --low: #7d929c;
+  --ok: #2e9b66;
+  --scrim: rgba(10, 22, 28, .55);
+  --shadow: 0 1px 0 rgba(23,38,48,.12), 0 1px 3px rgba(23,38,48,.08);
+  --f-display: "Unbounded", "Onest", system-ui, sans-serif;
+  --f-body: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --board: #0e1b22; --board-2: #15262f; --board-fg: #e6eef2; --board-muted: #8ea6b1;
+  --col: #18272f; --card: #22343e; --fg: #e3ecf0; --muted: #94a9b3; --line: #2f4450;
+  --accent: #f2b134; --accent-fg: #1d1606; --low: #7f959f; --scrim: rgba(0,0,0,.6);
+  --shadow: 0 1px 0 rgba(0,0,0,.35); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --board: #0e1b22; --board-2: #15262f; --board-fg: #e6eef2; --board-muted: #8ea6b1;
+  --col: #18272f; --card: #22343e; --fg: #e3ecf0; --muted: #94a9b3; --line: #2f4450;
+  --accent: #f2b134; --accent-fg: #1d1606; --low: #7f959f; --scrim: rgba(0,0,0,.6);
+  --shadow: 0 1px 0 rgba(0,0,0,.35); color-scheme: dark }
+
+html, body { min-height: 100% }
+body { background: var(--board); color: var(--board-fg); font-family: var(--f-body); font-size: 14px; line-height: 1.4 }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 28px; display: grid; gap: 16px }
+button, input, select, textarea { font: inherit; color: inherit }
+button { cursor: pointer }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: 22px; letter-spacing: -.01em; margin: 0; text-wrap: balance }
+.sub { color: var(--board-muted); font-size: 13px; font-variant-numeric: tabular-nums }
+.top-actions { display: flex; gap: 8px; flex-wrap: wrap }
+.btn { border: 0; border-radius: 6px; padding: 8px 12px; font-weight: 600; font-size: 13px; background: rgba(255,255,255,.14); color: var(--board-fg); display: inline-flex; align-items: center; gap: 6px }
+.btn:hover { background: rgba(255,255,255,.22) }
+.btn.primary { background: var(--accent); color: var(--accent-fg) }
+.btn.primary:hover { filter: brightness(1.06) }
+.btn:disabled { opacity: .55; cursor: default }
+
+/* composer */
+.composer { background: var(--board-2); border-radius: 10px; padding: 12px; display: grid; gap: 8px }
+.composer label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--board-muted); font-weight: 600 }
+.composer textarea { width: 100%; box-sizing: border-box; min-height: 64px; resize: vertical; border-radius: 8px; border: 1px solid transparent; background: var(--card); color: var(--fg); padding: 10px 12px; line-height: 1.45 }
+.composer-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+.hint { color: var(--board-muted); font-size: 12px; flex: 1; min-width: 200px }
+.status { font-size: 12px; color: var(--board-muted); font-family: var(--f-mono) }
+
+/* preview tray */
+.tray { background: var(--col); color: var(--fg); border-radius: 10px; padding: 12px; display: grid; gap: 10px }
+.tray h2 { margin: 0; font-size: 14px; font-weight: 700 }
+.tray-list { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) }
+.tray-item { background: var(--card); border-radius: 8px; padding: 8px 10px; box-shadow: var(--shadow); display: grid; gap: 4px; min-width: 0; position: relative }
+.tray-item .x { position: absolute; top: 4px; right: 4px; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; padding: 4px 6px }
+.tray-item .t { font-weight: 600; padding-right: 20px }
+.tray-item .m { font-size: 12px; color: var(--muted) }
+
+/* filters */
+.filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center }
+.chip { border: 0; border-radius: 999px; padding: 5px 11px; font-size: 12.5px; font-weight: 600; background: rgba(255,255,255,.12); color: var(--board-fg); display: inline-flex; align-items: center; gap: 6px }
+.chip .dot { width: 8px; height: 8px; border-radius: 50% }
+.chip .n { font-family: var(--f-mono); font-weight: 400; opacity: .8 }
+.chip[aria-pressed="true"] { background: var(--board-fg); color: var(--board) }
+
+/* board */
+.board { display: flex; gap: 12px; overflow-x: auto; align-items: flex-start; padding-bottom: 8px; scroll-snap-type: x proximity }
+.col { background: var(--col); color: var(--fg); border-radius: 10px; flex: 0 0 280px; max-width: 86vw; display: flex; flex-direction: column; max-height: calc(100vh - 120px); scroll-snap-align: start }
+.col-head { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 12px 6px; gap: 8px }
+.col-head h3 { margin: 0; font-size: 14px; font-weight: 700 }
+.col-head .n { font-family: var(--f-mono); font-size: 12px; color: var(--muted) }
+.col-body { padding: 4px 8px 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 40px }
+.col.drop .col-body { background: rgba(242,177,52,.14); border-radius: 8px }
+.col-add { border: 0; background: none; color: var(--muted); text-align: left; padding: 8px 12px 10px; font-size: 13px; border-radius: 0 0 10px 10px }
+.col-add:hover { background: rgba(127,146,156,.12); color: var(--fg) }
+.empty { color: var(--muted); font-size: 12.5px; padding: 6px 4px }
+
+.card { background: var(--card); border-radius: 8px; box-shadow: var(--shadow); padding: 8px 10px; display: grid; gap: 6px; cursor: pointer; border: 1px solid transparent; text-align: left; width: 100%; box-sizing: border-box; min-width: 0 }
+.card:hover { border-color: var(--line) }
+.card.dragging { opacity: .4 }
+.card.over { box-shadow: 0 -3px 0 var(--accent), var(--shadow) }
+.labels { display: flex; gap: 4px; flex-wrap: wrap }
+.label { font-size: 11px; font-weight: 600; color: #fff; border-radius: 4px; padding: 1px 7px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.card .title { font-weight: 500; overflow-wrap: anywhere }
+.card.done .title { text-decoration: line-through; color: var(--muted) }
+.meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 11.5px; color: var(--muted) }
+.prio { display: inline-flex; align-items: center; gap: 4px; font-weight: 600 }
+.prio i { width: 8px; height: 8px; border-radius: 2px; display: inline-block }
+.tag { font-family: var(--f-mono); font-size: 11px; background: rgba(127,146,156,.16); border-radius: 4px; padding: 0 5px }
+.src { font-family: var(--f-mono); font-size: 11px }
+
+/* banner */
+.banner { background: var(--col); color: var(--fg); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 12px; font-size: 13px }
+
+/* modal */
+.scrim { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: start center; padding: max(24px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 24px max(12px, env(safe-area-inset-left, 0px)); overflow-y: auto; z-index: 20 }
+.modal { background: var(--col); color: var(--fg); border-radius: 12px; width: min(560px, 100%); padding: 16px; display: grid; gap: 12px; box-sizing: border-box }
+.modal h2 { margin: 0; font-family: var(--f-display); font-size: 15px; font-weight: 500 }
+.field { display: grid; gap: 4px; min-width: 0 }
+.field > span { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600 }
+.field input, .field select, .field textarea { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 100%; box-sizing: border-box }
+.field textarea { min-height: 90px; resize: vertical }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px }
+.modal-actions { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap }
+.modal .btn { background: rgba(127,146,156,.18); color: var(--fg) }
+.modal .btn.primary { background: var(--accent); color: var(--accent-fg) }
+.modal .btn.danger { background: transparent; color: var(--hi) }
+.modal .btn.danger.armed { background: var(--hi); color: #fff }
+.src-line { font-size: 12px; color: var(--muted); font-family: var(--f-mono) }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--card); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 30; max-width: calc(100% - 32px) }
+@media (prefers-reduced-motion: no-preference) { .card { transition: border-color .12s } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Доска Карима</h1>
+      <div class="sub" id="sub">Загружаю задачи…</div>
+    </div>
+    <div class="top-actions">
+      <button class="btn" id="syncBtn" type="button" title="Запустить чтение Slack-канала прямо сейчас">↻ Подтянуть из Slack</button>
+      <button class="btn" id="settingsBtn" type="button">Настройки</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <section class="composer" aria-labelledby="composerLabel">
+    <label id="composerLabel" for="dump">Накидай задачи словами</label>
+    <textarea id="dump" placeholder="например: завтра скинуть цифры в дайджест, ТП до сих пор не работает — пнуть Ису, и почитать про курсив"></textarea>
+    <div class="composer-row">
+      <span class="hint">Claude разобьёт текст на задачи, разложит по фокусам и колонкам. Перед добавлением покажу, что получилось. ⌘/Ctrl + Enter — разобрать.</span>
+      <span class="status" id="status"></span>
+      <button class="btn primary" id="parseBtn" type="button">Разобрать</button>
+    </div>
+  </section>
+
+  <section class="tray" id="tray" hidden aria-live="polite">
+    <div class="composer-row">
+      <h2 id="trayTitle">Вот что получилось</h2>
+      <span class="hint" style="color:var(--muted)">Убери лишнее крестиком — остальное уйдёт на доску.</span>
+      <button class="btn" id="trayCancel" type="button" style="background:rgba(127,146,156,.18);color:var(--fg)">Отмена</button>
+      <button class="btn primary" id="trayAdd" type="button">Добавить</button>
+    </div>
+    <div class="tray-list" id="trayList"></div>
+  </section>
+
+  <nav class="filters" id="filters" aria-label="Фокусы"></nav>
+
+  <main class="board" id="board"></main>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<script src="parse.js"></script>
+<script>
+(() => {
+  const COLS = [
+    { id: 'inbox', name: 'Входящие' },
+    { id: 'today', name: 'Сегодня' },
+    { id: 'doing', name: 'В работе' },
+    { id: 'waiting', name: 'Ждёт других' },
+    { id: 'done', name: 'Готово' },
+  ];
+  const COLORS = ['#c8752a', '#2f7fd0', '#7a5cd6', '#2e9b66', '#c4486a', '#7f8a1f', '#2c95a8', '#a35a3a'];
+  const PRIO = { high: ['Высокий', 'var(--hi)'], med: ['Средний', 'var(--med)'], low: ['Низкий', 'var(--low)'] };
+  const PRIO_RANK = { high: 0, med: 1, low: 2 };
+  const DEFAULT_FOCUSES = [
+    { id: 'reviews', name: 'Ревью и рейтинги', color: 0, order: 0 },
+    { id: 'analytics', name: 'Аналитика и дайджест', color: 1, order: 1 },
+    { id: 'research', name: 'Ресерч и новые продукты', color: 2, order: 2 },
+    { id: 'creatives', name: 'Креативы и конкуренты', color: 3, order: 3 },
+    { id: 'other', name: 'Прочее', color: 6, order: 9 },
+  ];
+  const SITE_REPO = 'karimzharbulov-ai/upsell_new_ideas';
+  const SYNC_WORKFLOW = 'slack-sync.yml';
+  const DATA_PATH = 'tasks.json';
+  const CFG_KEY = 'karim-board-cfg-v1';
+
+  const S = { data: null, sha: null, filter: 'all', preview: [], busy: false, saving: false, pending: [], cfg: loadCfg() };
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, attrs = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'class') n.className = v;
+      else if (k === 'style') n.setAttribute('style', v);
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+      else if (v !== undefined && v !== null && v !== false) n.setAttribute(k, v === true ? '' : v);
+    }
+    for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) n.append(k.nodeType ? k : String(k));
+    return n;
+  };
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const fmtDate = (s) => { try { return new Date(s + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }); } catch { return s; } };
+  const uid = (p) => p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const tasks = () => S.data?.tasks || [];
+  const focuses = () => S.data?.focuses || [];
+  const focusById = (id) => focuses().find((f) => f.id === id);
+
+  function loadCfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY)) || {}; } catch { return {}; } }
+  function storeCfg(c) { S.cfg = c; try { localStorage.setItem(CFG_KEY, JSON.stringify(c)); } catch {} }
+  const configured = () => !!(S.cfg.ghToken && S.cfg.dataRepo);
+
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2800); }
+  function banner(msg) { const b = $('banner'); b.textContent = msg || ''; b.hidden = !msg; }
+  function status(msg) { $('status').textContent = msg || ''; }
+
+  // ---------- GitHub storage ----------
+  function gh(path, opts = {}) {
+    return fetch('https://api.github.com' + path, {
+      cache: 'no-store', ...opts,
+      headers: { Authorization: 'Bearer ' + S.cfg.ghToken, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+    });
+  }
+  function b64encode(str) {
+    const bytes = new TextEncoder().encode(str); let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+  function b64decode(b64) { const bin = atob(b64.replace(/\s/g, '')); return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))); }
+
+  async function fetchFile() {
+    const r = await gh(`/repos/${S.cfg.dataRepo}/contents/${DATA_PATH}?t=${Date.now()}`);
+    if (r.status === 404) return null;
+    if (r.status === 401) throw new Error('GitHub не принял токен. Проверь его в настройках.');
+    if (!r.ok) throw new Error('GitHub ответил ' + r.status);
+    const j = await r.json();
+    return { data: JSON.parse(b64decode(j.content)), sha: j.sha };
+  }
+  async function putFile(data, sha, message) {
+    return gh(`/repos/${S.cfg.dataRepo}/contents/${DATA_PATH}`, {
+      method: 'PUT', body: JSON.stringify({ message, content: b64encode(JSON.stringify(data, null, 2) + '\n'), ...(sha ? { sha } : {}) }),
+    });
+  }
+  async function ensureRepo() {
+    const r = await gh(`/repos/${S.cfg.dataRepo}`);
+    if (r.ok) { const j = await r.json(); if (!j.private) throw new Error(`Репо ${S.cfg.dataRepo} публичное. Задачи туда класть нельзя — сделай его приватным или укажи другое.`); return; }
+    if (r.status !== 404) throw new Error('GitHub ответил ' + r.status + ' на проверку репо');
+    const name = S.cfg.dataRepo.split('/')[1];
+    const c = await gh('/user/repos', { method: 'POST', body: JSON.stringify({ name, private: true, description: 'Данные доски задач' }) });
+    if (!c.ok) throw new Error(`Не смог создать приватное репо ${S.cfg.dataRepo}. Создай его вручную (Private) и обнови страницу.`);
+  }
+
+  async function load(initial) {
+    if (!configured()) { openSettings(true); return; }
+    try {
+      let f = await fetchFile();
+      if (!f) {
+        if (!initial) return;
+        await ensureRepo();
+        const data = { version: 1, focuses: DEFAULT_FOCUSES, tasks: [], meta: {} };
+        const r = await putFile(data, null, 'Создать доску');
+        if (!r.ok) throw new Error('Не смог создать tasks.json (' + r.status + ')');
+        f = { data, sha: (await r.json()).content.sha };
+      }
+      if (f.sha !== S.sha && !S.pending.length && !S.saving) { S.data = normalize(f.data); S.sha = f.sha; renderAll(); }
+      banner('');
+    } catch (e) { banner(e.message); }
+  }
+  function normalize(d) { d.focuses ||= DEFAULT_FOCUSES.slice(); d.tasks ||= []; d.meta ||= {}; return d; }
+
+  // Каждое изменение — операция над данными. При конфликте версий перечитываем файл и применяем операции заново.
+  function apply(op, msg) {
+    if (!S.data) return;
+    op(S.data); S.pending.push(op); renderAll();
+    clearTimeout(apply._t); apply._t = setTimeout(() => saveNow(msg), 500);
+  }
+  async function saveNow(msg) {
+    if (S.saving || !S.pending.length) return;
+    S.saving = true; const ops = S.pending; S.pending = [];
+    try {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const r = await putFile(S.data, S.sha, msg || 'Обновить доску');
+        if (r.ok) { S.sha = (await r.json()).content.sha; return; }
+        if (r.status === 409 || r.status === 422) {
+          const remote = await fetchFile(); if (!remote) throw new Error('tasks.json пропал');
+          S.data = normalize(remote.data); S.sha = remote.sha; ops.forEach((o) => o(S.data)); renderAll(); continue;
+        }
+        throw new Error('GitHub ответил ' + r.status);
+      }
+      throw new Error('слишком много конфликтов');
+    } catch (e) { S.pending = ops.concat(S.pending); toast('Не сохранилось: ' + e.message); }
+    finally { S.saving = false; if (S.pending.length) setTimeout(() => saveNow(), 1500); }
+  }
+
+  // ---------- rendering ----------
+  const sortTasks = (list) => list.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || (PRIO_RANK[a.priority] ?? 1) - (PRIO_RANK[b.priority] ?? 1));
+
+  function renderHeader() {
+    if (!S.data) { $('sub').textContent = configured() ? 'Загружаю задачи…' : 'Нужно подключить хранилище — открой настройки.'; return; }
+    const open = tasks().filter((t) => t.column !== 'done');
+    const d = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+    const last = S.data.meta?.slackSyncedAt ? ' · Slack ' + new Date(S.data.meta.slackSyncedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    $('sub').textContent = `${d} · открыто ${open.length} · на сегодня ${tasks().filter((t) => t.column === 'today').length} · срочных ${open.filter((t) => t.priority === 'high').length}${last}`;
+  }
+
+  function renderFilters() {
+    const f = $('filters'); f.replaceChildren();
+    const count = (id) => tasks().filter((t) => t.column !== 'done' && (id === 'all' || t.focus === id)).length;
+    f.append(el('button', { class: 'chip', type: 'button', 'aria-pressed': String(S.filter === 'all'), onclick: () => { S.filter = 'all'; renderAll(); } }, 'Все фокусы', el('span', { class: 'n' }, count('all'))));
+    for (const fo of focuses().slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))) {
+      f.append(el('button', { class: 'chip', type: 'button', 'aria-pressed': String(S.filter === fo.id), onclick: () => { S.filter = S.filter === fo.id ? 'all' : fo.id; renderAll(); } },
+        el('span', { class: 'dot', style: `background:${COLORS[(fo.color ?? 0) % COLORS.length]}` }), fo.name, el('span', { class: 'n' }, count(fo.id))));
+    }
+  }
+
+  function cardNode(t) {
+    const fo = focusById(t.focus); const p = PRIO[t.priority] || PRIO.med;
+    const node = el('button', { class: 'card' + (t.column === 'done' ? ' done' : ''), type: 'button', draggable: 'true', onclick: () => openEditor(t.id) },
+      fo ? el('div', { class: 'labels' }, el('span', { class: 'label', style: `background:${COLORS[(fo.color ?? 0) % COLORS.length]}` }, fo.name)) : null,
+      el('div', { class: 'title' }, t.title || 'Без названия'),
+      el('div', { class: 'meta' },
+        el('span', { class: 'prio' }, el('i', { style: `background:${p[1]}` }), p[0]),
+        t.due ? el('span', {}, '⏱ ' + fmtDate(t.due)) : null,
+        (t.tags || []).map((g) => el('span', { class: 'tag' }, g)),
+        t.notes ? el('span', { title: 'Есть заметки' }, '≡') : null));
+    node.addEventListener('dragstart', (e) => { node.classList.add('dragging'); e.dataTransfer.setData('text/plain', t.id); e.dataTransfer.effectAllowed = 'move'; });
+    node.addEventListener('dragend', () => node.classList.remove('dragging'));
+    node.addEventListener('dragover', (e) => { e.preventDefault(); node.classList.add('over'); });
+    node.addEventListener('dragleave', () => node.classList.remove('over'));
+    node.addEventListener('drop', (e) => {
+      e.preventDefault(); e.stopPropagation(); node.classList.remove('over');
+      const id = e.dataTransfer.getData('text/plain'); if (id && id !== t.id) moveTask(id, t.column, t.id);
+      document.querySelectorAll('.col.drop').forEach((c) => c.classList.remove('drop'));
+    });
+    return node;
+  }
+
+  function renderBoard() {
+    const b = $('board'); const keep = b.scrollLeft; b.replaceChildren();
+    const vis = tasks().filter((t) => S.filter === 'all' || t.focus === S.filter);
+    for (const c of COLS) {
+      const list = sortTasks(vis.filter((t) => (t.column || 'inbox') === c.id));
+      const body = el('div', { class: 'col-body' });
+      if (!list.length) body.append(el('div', { class: 'empty' }, !S.data ? 'Загрузка…' : c.id === 'inbox' ? 'Сюда падает всё новое. Накидай задачи в поле сверху.' : 'Пусто. Перетащи сюда карточку.'));
+      list.forEach((t) => body.append(cardNode(t)));
+      const col = el('section', { class: 'col', 'aria-label': c.name },
+        el('div', { class: 'col-head' }, el('h3', {}, c.name), el('span', { class: 'n' }, list.length)), body,
+        el('button', { class: 'col-add', type: 'button', onclick: () => openEditor(null, c.id) }, '+ Добавить карточку'));
+      col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('drop'); });
+      col.addEventListener('dragleave', (e) => { if (!col.contains(e.relatedTarget)) col.classList.remove('drop'); });
+      col.addEventListener('drop', (e) => { e.preventDefault(); col.classList.remove('drop'); const id = e.dataTransfer.getData('text/plain'); if (id) moveTask(id, c.id, null); });
+      b.append(col);
+    }
+    b.scrollLeft = keep;
+  }
+
+  function renderTray() {
+    $('tray').hidden = !S.preview.length; if (!S.preview.length) return;
+    $('trayTitle').textContent = `Вот что получилось: ${S.preview.length}`;
+    $('trayAdd').textContent = `Добавить ${S.preview.length}`;
+    const list = $('trayList'); list.replaceChildren();
+    S.preview.forEach((t, i) => {
+      const fo = String(t.focus || '').startsWith('new:') ? { name: t.focus.slice(4) + ' (новый)', color: focuses().length } : focusById(t.focus);
+      const col = COLS.find((c) => c.id === t.column) || COLS[0];
+      list.append(el('div', { class: 'tray-item' },
+        el('button', { class: 'x', type: 'button', 'aria-label': 'Убрать', onclick: () => { S.preview.splice(i, 1); renderTray(); } }, '×'),
+        el('div', { class: 'labels' }, fo ? el('span', { class: 'label', style: `background:${COLORS[(fo.color ?? 0) % COLORS.length]}` }, fo.name) : null),
+        el('div', { class: 't' }, t.title),
+        el('div', { class: 'm' }, `${col.name} · ${(PRIO[t.priority] || PRIO.med)[0].toLowerCase()} приоритет${t.due ? ' · до ' + fmtDate(t.due) : ''}${(t.tags || []).length ? ' · ' + t.tags.join(', ') : ''}`),
+        t.notes ? el('div', { class: 'm' }, t.notes) : null));
+    });
+  }
+  function renderAll() { renderHeader(); renderFilters(); renderBoard(); renderTray(); }
+
+  // ---------- operations ----------
+  function moveTask(id, column, beforeId) {
+    apply((d) => {
+      const t = d.tasks.find((x) => x.id === id); if (!t) return;
+      const colList = sortTasks(d.tasks.filter((x) => (x.column || 'inbox') === column && x.id !== id));
+      let order;
+      if (beforeId) {
+        const idx = colList.findIndex((x) => x.id === beforeId); const prev = colList[idx - 1]; const next = colList[idx];
+        order = idx < 0 ? Date.now() : prev ? ((prev.order ?? 0) + (next.order ?? 0)) / 2 : (next.order ?? 0) - 1;
+      } else order = colList.length ? (colList[colList.length - 1].order ?? 0) + 1 : 0;
+      if (column === 'done' && t.column !== 'done') t.doneAt = Date.now();
+      Object.assign(t, { column, order, updatedAt: Date.now() });
+    }, 'Переместить карточку');
+  }
+  function focusIdFor(d, spec) {
+    if (!spec) return 'other';
+    if (!String(spec).startsWith('new:')) return d.focuses.some((f) => f.id === spec) ? spec : 'other';
+    const name = spec.slice(4).trim() || 'Прочее';
+    const ex = d.focuses.find((f) => f.name.toLowerCase() === name.toLowerCase()); if (ex) return ex.id;
+    const id = uid('f'); d.focuses.push({ id, name, color: d.focuses.length % COLORS.length, order: d.focuses.length }); return id;
+  }
+  function addTasks(items, msg) {
+    const prepared = items.map((t) => ({ ...t, _id: uid('t') }));
+    apply((d) => {
+      let base = Date.now();
+      for (const t of prepared) {
+        if (d.tasks.some((x) => x.id === t._id)) continue;
+        d.tasks.push({
+          id: t._id, title: String(t.title).slice(0, 200), focus: focusIdFor(d, t.focus),
+          column: COLS.some((c) => c.id === t.column) ? t.column : 'inbox', priority: PRIO[t.priority] ? t.priority : 'med',
+          tags: Array.isArray(t.tags) ? t.tags.slice(0, 5).map(String) : [], notes: t.notes ? String(t.notes) : '',
+          due: t.due || null, source: t.source || 'Накидал вручную', order: base++, createdAt: Date.now(), updatedAt: Date.now(),
+        });
+      }
+    }, msg);
+  }
+
+  // ---------- Claude parsing ----------
+  async function parseText(text) {
+    if (!S.cfg.anthropicKey) throw Object.assign(new Error('no key'), { code: 'no_key' });
+    const prompt = TaskParse.buildParsePrompt({
+      text, todayISO: todayISO(),
+      focuses: focuses().map((f) => ({ id: f.id, name: f.name })),
+      existingTitles: tasks().filter((t) => t.column !== 'done').map((t) => t.title).slice(0, 150),
+    });
+    return TaskParse.extractJson(await TaskParse.askClaude({ apiKey: S.cfg.anthropicKey, prompt, browser: true }));
+  }
+  const fallbackParse = (text) => text.split(/\n|;|•/).map((s) => s.replace(/^[\s\-*\d.)]+/, '').trim()).filter((s) => s.length > 2)
+    .map((title) => ({ title, focus: 'other', column: 'inbox', priority: 'med', tags: [], notes: '' }));
+
+  async function onParse() {
+    const text = $('dump').value.trim(); if (!text || S.busy || !S.data) return;
+    S.busy = true; $('parseBtn').disabled = true; status('Claude разбирает…');
+    try {
+      const items = await parseText(text);
+      const src = 'Накидал ' + new Date().toLocaleDateString('ru-RU');
+      S.preview = items.map((t) => ({ ...t, source: src }));
+      status(items.length ? '' : 'Задач не нашёл. Попробуй написать подробнее.');
+    } catch (e) {
+      if (e.code === 'no_key') { S.preview = fallbackParse(text).map((t) => ({ ...t, source: 'Накидал вручную' })); status('Нет ключа Claude в настройках: разбил по строкам.'); }
+      else if (e.status === 401) status('Claude не принял API-ключ. Проверь его в настройках.');
+      else if (e.status === 429) status('Слишком часто. Подожди минуту.');
+      else status('Не получилось разобрать: ' + e.message);
+    } finally { S.busy = false; $('parseBtn').disabled = false; renderTray(); }
+  }
+
+  // ---------- Slack sync: запускает GitHub Action, который читает канал ----------
+  async function onSync() {
+    if (!configured()) return openSettings();
+    $('syncBtn').disabled = true; status('Запускаю чтение Slack…');
+    try {
+      const r = await gh(`/repos/${SITE_REPO}/actions/workflows/${SYNC_WORKFLOW}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: 'main' }) });
+      if (r.status === 204) { status('Читаю Slack, задачи появятся во «Входящих» через 1–2 минуты.'); [60, 120, 180].forEach((s) => setTimeout(() => load(false), s * 1000)); }
+      else if (r.status === 404) status('Синк ещё не включён: workflow должен быть в ветке main.');
+      else status('GitHub не запустил синк (' + r.status + '). Нужен токен с правом workflow.');
+    } catch (e) { status('Не получилось: ' + e.message); }
+    finally { setTimeout(() => ($('syncBtn').disabled = false), 5000); }
+  }
+
+  // ---------- editor ----------
+  function modalShell(node, onClose) {
+    const scrim = $('scrim'); scrim.replaceChildren(node); scrim.hidden = false;
+    const close = () => { scrim.hidden = true; scrim.replaceChildren(); document.removeEventListener('keydown', onKey); onClose?.(); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    scrim.onclick = (e) => { if (e.target === scrim) close(); };
+    return close;
+  }
+
+  function openEditor(id, column) {
+    if (!S.data) return;
+    const t = id ? tasks().find((x) => x.id === id) : { title: '', focus: S.filter !== 'all' ? S.filter : 'other', column: column || 'inbox', priority: 'med', tags: [], notes: '', due: null };
+    if (!t) return;
+    const fSel = el('select', { id: 'edFocus' },
+      focuses().slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((f) => el('option', { value: f.id, selected: f.id === t.focus }, f.name)),
+      el('option', { value: '__new' }, '+ Новый фокус…'));
+    const newFocus = el('input', { id: 'edNewFocus', placeholder: 'Название фокуса', hidden: true });
+    fSel.addEventListener('change', () => { newFocus.hidden = fSel.value !== '__new'; if (!newFocus.hidden) newFocus.focus(); });
+    const title = el('input', { id: 'edTitle', value: t.title || '' });
+    const notes = el('textarea', { id: 'edNotes' }); notes.value = t.notes || '';
+    const colSel = el('select', { id: 'edCol' }, COLS.map((c) => el('option', { value: c.id, selected: c.id === (t.column || 'inbox') }, c.name)));
+    const pSel = el('select', { id: 'edPrio' }, Object.entries(PRIO).map(([k, v]) => el('option', { value: k, selected: k === t.priority }, v[0])));
+    const tags = el('input', { id: 'edTags', value: (t.tags || []).join(', '), placeholder: 'iOS, Trustpilot' });
+    const due = el('input', { id: 'edDue', type: 'date', value: t.due || '' });
+    const del = el('button', { class: 'btn danger', type: 'button' }, 'Удалить');
+    let close;
+    del.addEventListener('click', () => {
+      if (!del.classList.contains('armed')) { del.classList.add('armed'); del.textContent = 'Точно удалить?'; return; }
+      close(); apply((d) => { d.tasks = d.tasks.filter((x) => x.id !== id); }, 'Удалить карточку'); toast('Удалил');
+    });
+    const save = () => {
+      if (!title.value.trim()) { title.focus(); return; }
+      const spec = fSel.value === '__new' ? 'new:' + (newFocus.value.trim() || 'Прочее') : fSel.value;
+      const patch = { title: title.value.trim(), notes: notes.value.trim(), column: colSel.value, priority: pSel.value,
+        tags: tags.value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 5), due: due.value || null };
+      close();
+      if (id) apply((d) => {
+        const x = d.tasks.find((y) => y.id === id); if (!x) return;
+        if (x.column !== patch.column) { patch.order = Date.now(); if (patch.column === 'done') patch.doneAt = Date.now(); }
+        Object.assign(x, patch, { focus: focusIdFor(d, spec), updatedAt: Date.now() });
+      }, 'Изменить карточку');
+      else addTasks([{ ...patch, focus: spec, source: 'Добавил вручную' }], 'Добавить карточку');
+      toast(id ? 'Сохранил' : 'Добавил');
+    };
+    const modal = el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'edHead' },
+      el('h2', { id: 'edHead' }, id ? 'Карточка' : 'Новая карточка'),
+      el('label', { class: 'field' }, el('span', {}, 'Задача'), title),
+      el('div', { class: 'grid2' },
+        el('label', { class: 'field' }, el('span', {}, 'Фокус'), fSel, newFocus),
+        el('label', { class: 'field' }, el('span', {}, 'Колонка'), colSel),
+        el('label', { class: 'field' }, el('span', {}, 'Приоритет'), pSel),
+        el('label', { class: 'field' }, el('span', {}, 'Срок'), due)),
+      el('label', { class: 'field' }, el('span', {}, 'Теги через запятую'), tags),
+      el('label', { class: 'field' }, el('span', {}, 'Заметки и контекст'), notes),
+      t.source ? el('div', { class: 'src-line' }, 'Источник: ' + t.source) : null,
+      el('div', { class: 'modal-actions' }, id ? del : el('span'),
+        el('div', { style: 'display:flex;gap:8px' },
+          el('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Закрыть'),
+          el('button', { class: 'btn primary', type: 'button', onclick: save }, 'Сохранить'))));
+    close = modalShell(modal);
+    modal.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save(); });
+    title.focus();
+  }
+
+  function openSettings(first) {
+    const c = S.cfg;
+    const tok = el('input', { id: 'cfgGh', type: 'password', value: c.ghToken || '', placeholder: 'ghp_…', autocomplete: 'off' });
+    const repo = el('input', { id: 'cfgRepo', value: c.dataRepo || 'karimzharbulov-ai/karim-tasks' });
+    const key = el('input', { id: 'cfgAi', type: 'password', value: c.anthropicKey || '', placeholder: 'sk-ant-…', autocomplete: 'off' });
+    let close;
+    const modal = el('div', { class: 'modal setup', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'cfgHead' },
+      el('h2', { id: 'cfgHead' }, first ? 'Подключи доску' : 'Настройки'),
+      el('p', {}, 'Сама страница публичная, а задачи лежат в твоём приватном репо. Ключи хранятся только в этом браузере.'),
+      el('ol', {},
+        el('li', {}, 'GitHub → Settings → Developer settings → Tokens (classic) → Generate. Галочки repo и workflow.'),
+        el('li', {}, 'Приватное репо для задач: если его нет, доска создаст сама.'),
+        el('li', {}, 'Ключ Claude: console.anthropic.com → API keys. Без него задачи добавляются построчно, без разбора.')),
+      el('label', { class: 'field' }, el('span', {}, 'GitHub токен'), tok),
+      el('label', { class: 'field' }, el('span', {}, 'Приватное репо для задач'), repo),
+      el('label', { class: 'field' }, el('span', {}, 'Claude API ключ'), key),
+      el('div', { class: 'modal-actions' },
+        el('button', { class: 'btn danger', type: 'button', onclick: () => { storeCfg({}); location.reload(); } }, 'Выйти на этом устройстве'),
+        el('div', { style: 'display:flex;gap:8px' },
+          el('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Закрыть'),
+          el('button', { class: 'btn primary', type: 'button', onclick: () => {
+            storeCfg({ ghToken: tok.value.trim(), dataRepo: repo.value.trim().replace(/^https:\/\/github\.com\//, ''), anthropicKey: key.value.trim() });
+            close(); S.sha = null; S.data = null; renderAll(); load(true);
+          } }, 'Сохранить'))));
+    close = modalShell(modal);
+    (c.ghToken ? key : tok).focus();
+  }
+
+  // ---------- boot ----------
+  $('parseBtn').addEventListener('click', onParse);
+  $('dump').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onParse(); });
+  $('trayAdd').addEventListener('click', () => { const n = S.preview.length; addTasks(S.preview, 'Добавить задачи'); S.preview = []; $('dump').value = ''; renderAll(); toast('Добавил ' + n); });
+  $('trayCancel').addEventListener('click', () => { S.preview = []; renderTray(); });
+  $('syncBtn').addEventListener('click', onSync);
+  $('settingsBtn').addEventListener('click', () => openSettings(false));
+  window.addEventListener('beforeunload', (e) => { if (S.pending.length || S.saving) { e.preventDefault(); e.returnValue = ''; } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
+  setInterval(() => { if (!document.hidden) load(false); }, 60000);
+  renderAll();
+  load(true);
+})();
+</script>
+</body>
+</html>
