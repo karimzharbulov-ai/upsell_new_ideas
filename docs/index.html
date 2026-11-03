@@ -250,11 +250,18 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: 22px; letter-sp
   }
   function b64decode(b64) { const bin = atob(b64.replace(/\s/g, '')); return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))); }
 
+  const CACHE_KEY = 'karim-board-cache-v1';
+  function readCache() { try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || null; } catch { return null; } }
+  function writeCache(dirty) { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data: S.data, dirty: !!dirty })); } catch {} }
+  async function ghMessage(r) { try { const j = await r.json(); return j.message ? ` (GitHub: ${j.message})` : ''; } catch { return ''; } }
+  const accessHint = () => `Токен не видит репо ${S.cfg.dataRepo}. Открой github.com/settings/personal-access-tokens → свой токен → Edit → Repository access: добавь ${S.cfg.dataRepo.split('/')[1]}; Permissions → Contents: Read and write. Или выпусти classic-токен с галочкой repo.`;
+
   async function fetchFile() {
     const r = await gh(`/repos/${S.cfg.dataRepo}/contents/${DATA_PATH}?t=${Date.now()}`);
     if (r.status === 404) return null;
-    if (r.status === 401) throw new Error('GitHub не принял токен. Проверь его в настройках.');
-    if (!r.ok) throw new Error('GitHub ответил ' + r.status);
+    if (r.status === 401) throw new Error('GitHub не принял токен: он неверный или истёк. Обнови его в настройках.');
+    if (r.status === 403) throw new Error(accessHint() + await ghMessage(r));
+    if (!r.ok) throw new Error('GitHub ответил ' + r.status + await ghMessage(r));
     const j = await r.json();
     return { data: JSON.parse(b64decode(j.content)), sha: j.sha };
   }
@@ -265,11 +272,23 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: 22px; letter-sp
   }
   async function ensureRepo() {
     const r = await gh(`/repos/${S.cfg.dataRepo}`);
-    if (r.ok) { const j = await r.json(); if (!j.private) throw new Error(`Репо ${S.cfg.dataRepo} публичное. Задачи туда класть нельзя — сделай его приватным или укажи другое.`); return; }
-    if (r.status !== 404) throw new Error('GitHub ответил ' + r.status + ' на проверку репо');
+    if (r.ok) { const j = await r.json(); if (!j.private) throw new Error(`Репо ${S.cfg.dataRepo} публичное. Задачи туда класть нельзя: сделай его приватным или укажи другое.`); return; }
+    if (r.status !== 404) throw new Error('GitHub ответил ' + r.status + ' на проверку репо' + await ghMessage(r));
     const name = S.cfg.dataRepo.split('/')[1];
     const c = await gh('/user/repos', { method: 'POST', body: JSON.stringify({ name, private: true, description: 'Данные доски задач' }) });
-    if (!c.ok) throw new Error(`Не смог создать приватное репо ${S.cfg.dataRepo}. Создай его вручную (Private) и обнови страницу.`);
+    if (c.status === 422) throw new Error(accessHint());
+    if (!c.ok) throw new Error(`Не смог создать приватное репо ${S.cfg.dataRepo}: создай его вручную (Private) и обнови страницу.` + await ghMessage(c));
+  }
+
+  // Слить задачи, сделанные офлайн в этом браузере, с тем, что лежит на GitHub.
+  function mergeLocal(remote, local) {
+    const byId = new Map(remote.tasks.map((t) => [t.id, t]));
+    for (const t of local.tasks || []) {
+      const r = byId.get(t.id);
+      if (!r) remote.tasks.push(t); else if ((t.updatedAt || 0) > (r.updatedAt || 0)) Object.assign(r, t);
+    }
+    for (const f of local.focuses || []) if (!remote.focuses.some((x) => x.id === f.id)) remote.focuses.push(f);
+    return remote;
   }
 
   async function load(initial) {
@@ -281,19 +300,35 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: 22px; letter-sp
         await ensureRepo();
         const data = { version: 1, focuses: DEFAULT_FOCUSES, tasks: [], meta: {} };
         const r = await putFile(data, null, 'Создать доску');
-        if (!r.ok) throw new Error('Не смог создать tasks.json (' + r.status + ')');
+        if (r.status === 404 || r.status === 403) throw new Error(accessHint() + await ghMessage(r));
+        if (!r.ok) throw new Error('Не смог создать tasks.json (' + r.status + ')' + await ghMessage(r));
         f = { data, sha: (await r.json()).content.sha };
       }
-      if (f.sha !== S.sha && !S.pending.length && !S.saving) { S.data = normalize(f.data); S.sha = f.sha; renderAll(); }
+      const cache = readCache();
+      if (S.local && cache?.dirty) {
+        S.local = false; S.data = mergeLocal(normalize(f.data), cache.data); S.sha = f.sha;
+        S.pending.push(() => {}); renderAll(); await saveNow('Перенести задачи из браузера'); writeCache(false);
+        toast('Перенёс задачи из браузера на GitHub');
+      } else if (f.sha !== S.sha && !S.pending.length && !S.saving) {
+        S.local = false; S.data = normalize(f.data); S.sha = f.sha; writeCache(false); renderAll();
+      }
       banner('');
-    } catch (e) { banner(e.message); }
+    } catch (e) {
+      if (!S.data || S.local) {
+        const cache = readCache();
+        S.local = true; S.data = normalize(cache?.data || { focuses: DEFAULT_FOCUSES.slice(), tasks: [], meta: {} }); renderAll();
+        banner(e.message + ' Пока сохраняю карточки в этом браузере и перенесу на GitHub, как только доступ появится.');
+      } else banner(e.message);
+    }
   }
   function normalize(d) { d.focuses ||= DEFAULT_FOCUSES.slice(); d.tasks ||= []; d.meta ||= {}; return d; }
 
   // Каждое изменение — операция над данными. При конфликте версий перечитываем файл и применяем операции заново.
   function apply(op, msg) {
     if (!S.data) return;
-    op(S.data); S.pending.push(op); renderAll();
+    op(S.data); renderAll();
+    if (S.local) { writeCache(true); return; }
+    S.pending.push(op);
     clearTimeout(apply._t); apply._t = setTimeout(() => saveNow(msg), 500);
   }
   async function saveNow(msg) {
@@ -302,16 +337,17 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: 22px; letter-sp
     try {
       for (let attempt = 0; attempt < 4; attempt++) {
         const r = await putFile(S.data, S.sha, msg || 'Обновить доску');
-        if (r.ok) { S.sha = (await r.json()).content.sha; return; }
+        if (r.ok) { S.sha = (await r.json()).content.sha; writeCache(false); return; }
         if (r.status === 409 || r.status === 422) {
           const remote = await fetchFile(); if (!remote) throw new Error('tasks.json пропал');
           S.data = normalize(remote.data); S.sha = remote.sha; ops.forEach((o) => o(S.data)); renderAll(); continue;
         }
-        throw new Error('GitHub ответил ' + r.status);
+        if (r.status === 403 || r.status === 404) throw new Error(accessHint());
+        throw new Error('GitHub ответил ' + r.status + await ghMessage(r));
       }
       throw new Error('слишком много конфликтов');
-    } catch (e) { S.pending = ops.concat(S.pending); toast('Не сохранилось: ' + e.message); }
-    finally { S.saving = false; if (S.pending.length) setTimeout(() => saveNow(), 1500); }
+    } catch (e) { S.pending = ops.concat(S.pending); writeCache(true); toast('Не сохранилось на GitHub: ' + e.message); }
+    finally { S.saving = false; if (S.pending.length) setTimeout(() => saveNow(), 5000); }
   }
 
   // ---------- rendering ----------
@@ -574,8 +610,8 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: 22px; letter-sp
   $('syncBtn').addEventListener('click', onSync);
   $('settingsBtn').addEventListener('click', () => openSettings(false));
   window.addEventListener('beforeunload', (e) => { if (S.pending.length || S.saving) { e.preventDefault(); e.returnValue = ''; } });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
-  setInterval(() => { if (!document.hidden) load(false); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) load(S.local); });
+  setInterval(() => { if (!document.hidden) load(S.local); }, 60000);
   renderAll();
   load(true);
 })();
